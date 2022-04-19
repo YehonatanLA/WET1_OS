@@ -1,13 +1,13 @@
-//#include <unistd.h>
+#include <unistd.h>
 #include <string.h>
 #include <iostream>
 #include <vector>
 #include <sstream>
-//#include <sys/wait.h>
+#include <sys/wait.h>
 #include <iomanip>
 #include "Commands.h"
 #include <time.h>
-//#include <utime.h>
+#include <utime.h>
 
 
 using namespace std;
@@ -25,6 +25,19 @@ using namespace std;
 
 const std::string WHITESPACE = " \n\r\t\f\v";
 
+string _ltrim(const std::string &s) {
+    size_t start = s.find_first_not_of(WHITESPACE);
+    return (start == std::string::npos) ? "" : s.substr(start);
+}
+
+string _rtrim(const std::string &s) {
+    size_t end = s.find_last_not_of(WHITESPACE);
+    return (end == std::string::npos) ? "" : s.substr(0, end + 1);
+}
+
+string _trim(const std::string &s) {
+    return _rtrim(_ltrim(s));
+}
 
 int _parseCommandLine(const char *cmd_line, char **args) {
     FUNC_ENTRY()
@@ -41,7 +54,7 @@ int _parseCommandLine(const char *cmd_line, char **args) {
     FUNC_EXIT()
 }
 
-bool _isBackgroundComamnd(const char *cmd_line) {
+bool _isBackgroundCommand(const char *cmd_line) {
     const string str(cmd_line);
     return str[str.find_last_not_of(WHITESPACE)] == '&';
 }
@@ -83,8 +96,12 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     string cmd_s = _trim(string(cmd_line));
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
-
-    /*if (firstWord.compare("pwd") == 0) {
+    if (firstWord.compare("chprompt") == 0 || firstWord.compare("chprompt&") == 0) {
+        //? check if needed to check in if the &
+        saveChangePrompt(cmd_line);
+    }
+    /*
+    if (firstWord.compare("pwd") == 0) {
       return new GetCurrDirCommand(cmd_line);
     }
     else if (firstWord.compare("showpid") == 0) {
@@ -94,8 +111,8 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     .....
     else {
       return new ExternalCommand(cmd_line);
-    }*/
-
+    }
+    */
     return nullptr;
 }
 
@@ -105,4 +122,6 @@ void SmallShell::executeCommand(const char *cmd_line) {
     // Command* cmd = CreateCommand(cmd_line);
     // cmd->execute();
     // Please note that you must fork smash process for some commands (e.g., external commands....)
+
+    Command *cmd = CreateCommand(cmd_line);
 }
