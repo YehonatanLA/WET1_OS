@@ -1,13 +1,17 @@
 #ifndef SMASH_COMMAND_H_
 #define SMASH_COMMAND_H_
 
-#include <vector>
+#include <ctime>
+#include <list>
+#include <unordered_map>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
 
 class Command {
 // TODO: Add your data members
+    int pid;
+    const char* cmd_line;
 // ? pid
 public:
     Command(const char *cmd_line);
@@ -17,7 +21,10 @@ public:
     virtual void execute() = 0;
     //virtual void prepare();
     //virtual void cleanup();
+
     // TODO: Add your extra methods if needed
+    int getPid() const;
+    const char* getLine();
 };
 
 class BuiltInCommand : public Command {
@@ -101,13 +108,38 @@ class QuitCommand : public BuiltInCommand {
 class JobsList {
 public:
     class JobEntry {
+        int pid;
+        int job_id;
+        const char* cmd_input;
+        bool stopped;
+        time_t time_entered;
+
         // TODO: Add your data members
+        friend JobsList;
+    public:
+        JobEntry(int pid, int job_id, const char *cmd_input, bool stopped, time_t start_time);
+
+        int getPid() const;
+
+        bool getStopped() const;
+
+        const char *getCmdInput();
+
+        int getJobId() const;
+
+        void ChangeStopped();
     };
     // TODO: Add your data members
+    int max_jobId;
+
+    std::list<JobEntry*> jobs;
+    std::unordered_map<int, std::list<JobEntry*>::iterator> job_ids; //points to an item in the job list
+
+
 public:
     JobsList();
 
-    ~JobsList();
+    ~JobsList() = default; //? defualt or need to destruct the data structures and data inside
 
     void addJob(Command *cmd, bool isStopped = false);
 
@@ -123,14 +155,20 @@ public:
 
     JobEntry *getLastJob(int *lastJobId);
 
-    JobEntry *getLastStoppedJob(int *jobId);
+    JobsList::JobEntry *getLastStoppedJob();
     // TODO: Add extra methods or modify exisitng ones as needed
+    int findJobId(int pid);
+
+    bool isEmpty() const;
+
+    bool jobExists(int jobId);
 };
 
 class JobsCommand : public BuiltInCommand {
     // TODO: Add your data members
+    JobsList *extra_jobs;
 public:
-    JobsCommand(const char *cmd_line, JobsList *jobs);
+    JobsCommand(const char *cmdLine, JobsList *jobs);
 
     virtual ~JobsCommand() {}
 
@@ -148,9 +186,12 @@ public:
 };
 
 class ForegroundCommand : public BuiltInCommand {
+
     // TODO: Add your data members
+    int jobId;
+    JobsList* jobs_list;
 public:
-    ForegroundCommand(const char *cmd_line, JobsList *jobs);
+    ForegroundCommand(const char *cmd_line, JobsList *jobs, int job_number);
 
     virtual ~ForegroundCommand() {}
 
@@ -159,8 +200,10 @@ public:
 
 class BackgroundCommand : public BuiltInCommand {
     // TODO: Add your data members
+    int jobIdBackground;
+    JobsList* jobs_list_background;
 public:
-    BackgroundCommand(const char *cmd_line, JobsList *jobs);
+    BackgroundCommand(const char *cmd_line, JobsList *jobs, int job_number);
 
     virtual ~BackgroundCommand() {}
 
@@ -193,6 +236,7 @@ private:
     SmallShell();
 
 public:
+    JobsList extra_jobs;
     const std::string default_prompt = "smash> ";
 
     const std::string& getCurrPrompt();
@@ -210,10 +254,14 @@ public:
     }
 
     ~SmallShell();
-
     void executeCommand(const char *cmd_line);
+
     // TODO: add extra methods as needed
-    static static void saveChangePrompt(const char* cmd);
+    static void saveChangePrompt(const char* cmd);
+
+    static bool isNumber(char *string);
+
+    static int checkSyntax(const char *line, char **args);
 };
 
 #endif //SMASH_COMMAND_H_
