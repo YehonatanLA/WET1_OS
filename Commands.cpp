@@ -23,8 +23,10 @@ using namespace std;
 #else
 #define FUNC_ENTRY()
 #define FUNC_EXIT()
-#define LAST_JOB -1
+#define LAST_JOB (-1)
+#define MAX_PROCESSES_AMOUNT (100)
 
+#define NO_PID (-1)
 #endif
 
 
@@ -95,22 +97,21 @@ SmallShell::~SmallShell() {
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
-Command *SmallShell::CreateCommand(const char *cmd_line) {
+Command *SmallShell::CreateCommand(const char *new_cmd) {
     // For example:
-
+    const char* cmd_line = (char *) malloc(sizeof(char) * strlen(new_cmd));
+    strcpy((char*)cmd_line, new_cmd);
     string cmd_s = _trim(string(cmd_line));
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
-    if (firstWord.compare("chprompt") == 0 || firstWord.compare("chprompt&") == 0) {
-        //? check if needed to check in if the &
+    if (firstWord == "chprompt") {
+
         saveChangePrompt(cmd_line);
 
-    } else if (firstWord.compare("jobs") == 0 || firstWord.compare("jobs&") == 0) {
-        //? check if needed to check in if the &
+    } else if (firstWord == "jobs") {
         return new JobsCommand(cmd_line, &extra_jobs);
 
-    } else if (firstWord.compare("fg") == 0 || firstWord.compare("fg&") == 0) {
-        //? check if needed to check in if the &
+    } else if (firstWord == "fg") {
         char *args[COMMAND_MAX_ARGS];
         int job_number = checkSyntax(cmd_line, args);
         if (job_number < LAST_JOB) {
@@ -119,8 +120,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         }
         return new ForegroundCommand(cmd_line, &extra_jobs, job_number);
 
-    } else if (firstWord.compare("bg") == 0 || firstWord.compare("bg&") == 0) {
-        //? check if needed to check in if the &
+    } else if (firstWord =="bg") {
         char *args[COMMAND_MAX_ARGS];
         int job_number = checkSyntax(cmd_line, args);
         if (job_number < LAST_JOB) {
@@ -129,6 +129,11 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         }
         return new BackgroundCommand(cmd_line, &extra_jobs, job_number);
 
+    }
+
+    else{
+        //must be an externalCommand
+        return new ExternalCommand(cmd_line);
     }
     /*
     if (firstWord.compare("pwd") == 0) {
@@ -154,6 +159,9 @@ void SmallShell::executeCommand(const char *cmd_line) {
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 
     Command *cmd = CreateCommand(cmd_line);
+    if(cmdIsChprompt(cmd_line)){
+        return;
+    }
     //! if this is a external command, we need to make sure that we are forking and execv ing the process (and something about setpgrp)
     cmd->execute();
 }
@@ -166,29 +174,34 @@ void JobsCommand::execute() {
 
 void ForegroundCommand::execute() {
 //the function brings either a bg process or a stopped process to fg
-    if (this->jobId != LAST_JOB && !jobs_list->jobExists(this->jobId)) {
+    if (this->jobId != LAST_JOB && !jobs_list_fg->jobExists(this->jobId)) {
+
         std::cout << "smash error: fg: job-id " << this->jobId <<" does not exist" << endl;
         return;
-    } else if (this->jobId == LAST_JOB && jobs_list->isEmpty()) {
+    } else if (this->jobId == LAST_JOB && jobs_list_fg->isEmpty()) {
         cout << "smash error: fg: jobs list is empty" << endl;
         return;
     }
     JobsList::JobEntry *chosen_job;
 
     if (this->jobId == LAST_JOB) {
-        chosen_job = jobs_list->getLastJob(nullptr);
+        chosen_job = jobs_list_fg->getLastJob(nullptr);
         this->jobId = chosen_job->getJobId();
     } else {
-        chosen_job = jobs_list->getJobById(this->jobId);
+        chosen_job = jobs_list_fg->getJobById(this->jobId);
     }
 
     if (chosen_job->getStopped()) {
-        // ? send SIGCONT, not sure how to do
+        int ret = kill(chosen_job->getPid(), SIGCONT);
+        if(ret < 0){
+            // * failed to send sigcont to prcess
+            perror("smash error: kill failed");
+        }
 
     }
     std::cout << chosen_job->getCmdInput() << " : " << chosen_job->getPid() << "\n";
-    waitpid(chosen_job->getPid(), nullptr); //? should I care about the status?
-    jobs_list->removeJobById(jobId);
+    waitpid(chosen_job->getPid(), nullptr, 0);
+    jobs_list_fg->removeJobById(jobId);
 
 
 }
@@ -220,8 +233,44 @@ void BackgroundCommand::execute() {
     }
     cout << stopped_job->getCmdInput() << ": " << this->jobIdBackground;
      stopped_job->ChangeStopped();
-    // ? send SIGCONT, not sure how to do
+    int ret = kill(stopped_job->getPid(), SIGCONT);
+    if(ret < 0){
+        // * failed to send sigcont to prcess
+        perror("smash error: kill failed");
+    }
 
+}
+
+void ExternalCommand::execute() {
+    char* args[COMMAND_MAX_ARGS];
+    _parseCommandLine(cmd_line, args);
+    pid_t c_pid = fork();
+    char* run_in_bash = (char*) malloc(sizeof(char*) * strlen(cmd_line));
+    strcpy(run_in_bash, cmd_line);
+    _removeBackgroundSign(run_in_bash);
+
+    if(c_pid == 0){
+        setpgrp();
+        //we're in the child process
+        char* const args_for_bash[4] = {(char*) "/bin/bash",(char*)"-c", run_in_bash, nullptr};
+        execv(args_for_bash[0], args_for_bash);
+        //if this returned, something wrong happened
+        throw std::exception();
+    }
+    else{
+        //we're in the parent process
+        if(_isBackgroundCommand(cmd_line)){
+            //runs in background
+
+            SmallShell& smash = SmallShell::getInstance();
+          pid = int(c_pid); //changing the default pid to relevant pid
+            smash.extra_jobs.addJob(this, false);
+        }
+        else{
+            //runs in the foreground
+            waitpid(c_pid, nullptr, 0); //? should I save the status? Also, should I save ethe return value?
+        }
+    }
 }
 
 const std::string &SmallShell::getCurrPrompt() {
@@ -247,7 +296,7 @@ void SmallShell::saveChangePrompt(const char *cmd) {
 
 bool SmallShell::isNumber(char *string) {
     size_t len = strlen(string);
-    for (int i = 0; i < len; i++) {
+    for (size_t i = 0; i < len; i++) {
         if (!isdigit(string[i])) {
             return false;
         }
@@ -261,7 +310,7 @@ int SmallShell::checkSyntax(const char *line, char **args) {
     int args_amount = _parseCommandLine(line, args);
 
     if (args_amount == 2 && isNumber(args[1])) {
-        job = int(args[1]);
+        job = atoi(args[1]);
     } else if (args_amount == 1) {
         job = LAST_JOB;
     } else {
@@ -270,10 +319,17 @@ int SmallShell::checkSyntax(const char *line, char **args) {
     return job;
 }
 
+bool SmallShell::cmdIsChprompt(const char *line) {
+    string cmd_s = _trim(string(line));
+    string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
+    return firstWord == "chprompt";
+
+}
+
 void JobsList::addJob(Command *cmd, bool isStopped) {
     //the function receives a command and if the proccess stopped and puts it in the jobs list
     removeFinishedJobs();
-    if (jobs.size() == 100) {
+    if (jobs.size() == MAX_PROCESSES_AMOUNT) {
         //! problem, not sure what to do
         throw std::exception();
     }
@@ -281,8 +337,9 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     // * unless of course it is meant that I add the same job while it is already in job list, somehow
     max_jobId++;
     // * check if needed to copy string
-    JobEntry new_job = JobEntry(cmd->getPid(), max_jobId, cmd->getLine(), isStopped, time(nullptr));
-    job_ids[max_jobId] = jobs.insert(jobs.end(), &new_job); // hash[jobid] = pointer to the new element in linked list
+    JobEntry *new_job = new JobEntry(cmd->getPid(), max_jobId, cmd->getLine(), isStopped, time(nullptr));
+    //! need to delete the jobEntry in destructor for clearing memory
+    job_ids[max_jobId] = jobs.insert(jobs.end(), new_job); // hash[jobid] = pointer to the new element in linked list
 
 
 }
@@ -295,7 +352,7 @@ void JobsList::printJobsList() {
         const char *input = job->cmd_input;
         int curr_pid = job->pid;
         time_t status_time = time(nullptr);
-        cout << "[" << curr_job_id << "] " << input << " :" << curr_pid << difftime(status_time, job->time_entered);
+        cout << "[" << curr_job_id << "] " << input << " :" << curr_pid << " " << difftime(status_time, job->time_entered);
 
         if (job->stopped) {
             cout << " (stopped)";
@@ -307,15 +364,11 @@ void JobsList::printJobsList() {
 void JobsList::removeFinishedJobs() {
     //The function removes all jobs from linked list and hash that finished
 
-    auto it = jobs.begin();
-    int kid_pid = waitpid(-1, nullptr, WNHOANG);
+    int kid_pid = waitpid(-1, nullptr, WNOHANG);
     while (kid_pid > 0) {
-
-        // * two ways of going with this - either choose a way to convert pid to jobid (let's say pid->jobid hash) and use the hash,
-        // * or delete by naive way
         int job_id = findJobId(kid_pid);
         removeJobById(job_id);
-        kid_pid = waitpid(-1, nullptr, WNHOANG);
+        kid_pid = waitpid(-1, nullptr, WNOHANG);
     }
 }
 
@@ -393,6 +446,14 @@ const char *Command::getLine() {
     return cmd_line;
 }
 
+Command::Command(const char *cmd_line): cmd_line(cmd_line) {
+        pid = NO_PID;
+}
+
+void Command::setPid(int new_pid) {
+    this->pid = new_pid;
+}
+
 JobsList::JobEntry::JobEntry(int pid, int job_id, const char *cmd_input, bool stopped, time_t start_time) : pid(pid),
                                                                                                             job_id(job_id),
                                                                                                             cmd_input(
@@ -428,9 +489,14 @@ JobsCommand::JobsCommand(const char *cmdLine, JobsList *jobs) : BuiltInCommand(c
 }
 
 ForegroundCommand::ForegroundCommand(const char *cmd_line, JobsList *jobs, int job_number) : BuiltInCommand(cmd_line),
-                                                                                             jobs_list(jobs),
-                                                                                             jobId(job_number) {}
+                                                                                             jobId(job_number),
+                                                                                             jobs_list_fg(jobs)
+                                                                                              {}
 
 BackgroundCommand::BackgroundCommand(const char *cmd_line, JobsList *jobs, int job_number) :
         BuiltInCommand(cmd_line),
-        jobs_list_background(jobs), jobIdBackground(job_number) {}
+        jobIdBackground(job_number), jobs_list_background(jobs) {}
+
+ExternalCommand::ExternalCommand(const char *cmd_line) : Command(cmd_line) {
+
+}

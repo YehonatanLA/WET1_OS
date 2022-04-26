@@ -10,13 +10,14 @@
 
 class Command {
 // TODO: Add your data members
+protected:
     int pid;
     const char* cmd_line;
 // ? pid
 public:
-    Command(const char *cmd_line);
+    explicit Command(const char *cmd_line);
 
-    virtual ~Command();
+    virtual ~Command() = default;
 
     virtual void execute() = 0;
     //virtual void prepare();
@@ -25,11 +26,12 @@ public:
     // TODO: Add your extra methods if needed
     int getPid() const;
     const char* getLine();
+    void setPid(int new_pid);
 };
 
 class BuiltInCommand : public Command {
 public:
-    BuiltInCommand(const char *cmd_line);
+    explicit BuiltInCommand(const char *cmd_line);
 
     virtual ~BuiltInCommand() {}
 };
@@ -189,7 +191,7 @@ class ForegroundCommand : public BuiltInCommand {
 
     // TODO: Add your data members
     int jobId;
-    JobsList* jobs_list;
+    JobsList* jobs_list_fg;
 public:
     ForegroundCommand(const char *cmd_line, JobsList *jobs, int job_number);
 
@@ -232,7 +234,7 @@ public:
 class SmallShell {
 private:
     // TODO: Add your data members
-    std::string curr_prompt = default_prompt;
+    std::string curr_prompt = "smash> ";
     SmallShell();
 
 public:
@@ -262,6 +264,8 @@ public:
     static bool isNumber(char *string);
 
     static int checkSyntax(const char *line, char **args);
+
+    bool cmdIsChprompt(const char *line);
 };
 
 #endif //SMASH_COMMAND_H_
