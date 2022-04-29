@@ -1,15 +1,4 @@
-#include <unistd.h>
-#include <string.h>
-#include <iostream>
-#include <vector>
-#include "signal.h"
-#include <sstream>
-#include <sys/wait.h>
-#include <iomanip>
 #include "Commands.h"
-#include <time.h>
-#include <utime.h>
-#include <cstring>
 
 
 using namespace std;
@@ -30,27 +19,27 @@ using namespace std;
 #endif
 
 
-const std::string WHITESPACE = " \n\r\t\f\v";
+const string WHITESPACE = " \n\r\t\f\v";
 
-string _ltrim(const std::string &s) {
+string _ltrim(const string &s) {
     size_t start = s.find_first_not_of(WHITESPACE);
-    return (start == std::string::npos) ? "" : s.substr(start);
+    return (start == string::npos) ? "" : s.substr(start);
 }
 
-string _rtrim(const std::string &s) {
+string _rtrim(const string &s) {
     size_t end = s.find_last_not_of(WHITESPACE);
-    return (end == std::string::npos) ? "" : s.substr(0, end + 1);
+    return (end == string::npos) ? "" : s.substr(0, end + 1);
 }
 
-string _trim(const std::string &s) {
+string _trim(const string &s) {
     return _rtrim(_ltrim(s));
 }
 
 int _parseCommandLine(const char *cmd_line, char **args) {
     FUNC_ENTRY()
     int i = 0;
-    std::istringstream iss(_trim(string(cmd_line)).c_str());
-    for (std::string s; iss >> s;) {
+    istringstream iss(_trim(string(cmd_line)).c_str());
+    for (string s; iss >> s;) {
         args[i] = (char *) malloc(s.length() + 1);
         memset(args[i], 0, s.length() + 1);
         strcpy(args[i], s.c_str());
@@ -84,7 +73,7 @@ void _removeBackgroundSign(char *cmd_line) {
     cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
-// TODO: Add your implementation for classes in Commands.h 
+// TODO: Add your implementation for classes in Commands.h
 
 SmallShell::SmallShell() {
 // TODO: add your implementation
@@ -115,39 +104,33 @@ Command *SmallShell::CreateCommand(const char *new_cmd) {
         char *args[COMMAND_MAX_ARGS];
         int job_number = checkSyntax(cmd_line, args);
         if (job_number < LAST_JOB) {
-            std::cout << "smash error: fg: invalid arguments" << std::endl;
-            throw std::exception(); //? or return nullptr
+            cerr << "smash error: fg: invalid arguments" << endl;
+            throw exception(); //? or return nullptr
         }
         return new ForegroundCommand(cmd_line, &extra_jobs, job_number);
 
-    } else if (firstWord =="bg") {
+    } else if (firstWord == "bg") {
         char *args[COMMAND_MAX_ARGS];
         int job_number = checkSyntax(cmd_line, args);
         if (job_number < LAST_JOB) {
-            std::cout << "smash error: bg: invalid arguments" << std::endl;
-            throw std::exception(); //? or return nullptr
+            cerr << "smash error: bg: invalid arguments" << endl;
+            throw exception(); //? or return nullptr
         }
         return new BackgroundCommand(cmd_line, &extra_jobs, job_number);
-
-    }
-
-    else{
+    } else if (firstWord == "showpid") {
+        //? check if needed to check in if the &
+        return new ShowPidCommand(cmd_line);
+    } else if (firstWord == "pwd") {
+        return new GetCurrDirCommand(cmd_line);
+    } else if (firstWord == "cd") {
+        return new ChangeDirCommand(cmd_line, pLastPwd);
+    } else if (firstWord == "kill") {
+        return new KillCommand(cmd_line, &extra_jobs);
+    } else {
         //must be an externalCommand
         return new ExternalCommand(cmd_line);
     }
-    /*
-    if (firstWord.compare("pwd") == 0) {
-      return new GetCurrDirCommand(cmd_line);
-    }
-    else if (firstWord.compare("showpid") == 0) {
-      return new ShowPidCommand(cmd_line);
-    }
-    else if ...
-    .....
-    else {
-      return new ExternalCommand(cmd_line);
-    }
-    */
+
     return nullptr;
 }
 
@@ -176,10 +159,10 @@ void ForegroundCommand::execute() {
 //the function brings either a bg process or a stopped process to fg
     if (this->jobId != LAST_JOB && !jobs_list_fg->jobExists(this->jobId)) {
 
-        std::cout << "smash error: fg: job-id " << this->jobId <<" does not exist" << endl;
+        cerr << "smash error: fg: job-id " << this->jobId <<" does not exist" << endl;
         return;
     } else if (this->jobId == LAST_JOB && jobs_list_fg->isEmpty()) {
-        cout << "smash error: fg: jobs list is empty" << endl;
+        cerr << "smash error: fg: jobs list is empty" << endl;
         return;
     }
     JobsList::JobEntry *chosen_job;
@@ -192,15 +175,15 @@ void ForegroundCommand::execute() {
     }
 
     if (chosen_job->getStopped()) {
-        int ret = kill(chosen_job->getPid(), SIGCONT);
+        int ret = kill(chosen_job->getJobPid(), SIGCONT);
         if(ret < 0){
             // * failed to send sigcont to prcess
             perror("smash error: kill failed");
         }
 
     }
-    std::cout << chosen_job->getCmdInput() << " : " << chosen_job->getPid() << "\n";
-    waitpid(chosen_job->getPid(), nullptr, 0);
+    cout << chosen_job->getCmdInput() << " : " << chosen_job->getJobPid() << "\n";
+    waitpid(chosen_job->getJobPid(), nullptr, 0);
     jobs_list_fg->removeJobById(jobId);
 
 
@@ -210,10 +193,10 @@ void ForegroundCommand::execute() {
 void BackgroundCommand::execute() {
     //the function brings a stopped process to bg
     if (this->jobIdBackground != LAST_JOB && !jobs_list_background->jobExists(this->jobIdBackground)) {
-        std::cout << "smash error: bg: job-id " << this->jobIdBackground <<" does not exist" << endl;
+        cerr << "smash error: bg: job-id " << this->jobIdBackground <<" does not exist" << endl;
         return;
     } else if (this->jobIdBackground == LAST_JOB && jobs_list_background->isEmpty()) {
-        cout << "smash error: bg: jobs list is empty" << endl;
+        cerr << "smash error: bg: jobs list is empty" << endl;
         return;
     }
     JobsList::JobEntry* stopped_job;
@@ -223,8 +206,8 @@ void BackgroundCommand::execute() {
             stopped_job = jobs_list_background->getLastStoppedJob();
             this->jobIdBackground = stopped_job->getJobId();
         }
-        catch(std::exception&){
-            cout << "smash error: bg: there is no stopped jobs to resume" << endl;
+        catch(exception&){
+            cerr << "smash error: bg: there is no stopped jobs to resume" << endl;
             return;
         }
     }
@@ -233,7 +216,7 @@ void BackgroundCommand::execute() {
     }
     cout << stopped_job->getCmdInput() << ": " << this->jobIdBackground;
      stopped_job->ChangeStopped();
-    int ret = kill(stopped_job->getPid(), SIGCONT);
+    int ret = kill(stopped_job->getJobPid(), SIGCONT);
     if(ret < 0){
         // * failed to send sigcont to prcess
         perror("smash error: kill failed");
@@ -255,7 +238,7 @@ void ExternalCommand::execute() {
         char* const args_for_bash[4] = {(char*) "/bin/bash",(char*)"-c", run_in_bash, nullptr};
         execv(args_for_bash[0], args_for_bash);
         //if this returned, something wrong happened
-        throw std::exception();
+        throw exception();
     }
     else{
         //we're in the parent process
@@ -273,7 +256,7 @@ void ExternalCommand::execute() {
     }
 }
 
-const std::string &SmallShell::getCurrPrompt() {
+const string &SmallShell::getCurrPrompt() {
     return curr_prompt;
 }
 
@@ -289,7 +272,7 @@ void SmallShell::saveChangePrompt(const char *cmd) {
     if (num_args == 1) {
         smash.setCurrPrompt(smash.default_prompt);
     } else {
-        std::string new_prompt = string(args[1]).append(string("> ")); //? check if works
+        string new_prompt = string(args[1]).append(string("> ")); //? check if works
         smash.setCurrPrompt(new_prompt);
     }
 }
@@ -303,7 +286,6 @@ bool SmallShell::isNumber(char *string) {
     }
     return true;
 }
-
 
 int SmallShell::checkSyntax(const char *line, char **args) {
     int job;
@@ -331,13 +313,13 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
     if (jobs.size() == MAX_PROCESSES_AMOUNT) {
         //! problem, not sure what to do
-        throw std::exception();
+        throw exception();
     }
     //? should I check if the job is added again? in page 7 it says to reset timer, but how do I check if it was added in the first place?
     // * unless of course it is meant that I add the same job while it is already in job list, somehow
     max_jobId++;
     // * check if needed to copy string
-    JobEntry *new_job = new JobEntry(cmd->getPid(), max_jobId, cmd->getLine(), isStopped, time(nullptr));
+    JobEntry *new_job = new JobEntry(cmd->getCommandPid(), max_jobId, cmd->getLine(), isStopped, time(nullptr));
     //! need to delete the jobEntry in destructor for clearing memory
     job_ids[max_jobId] = jobs.insert(jobs.end(), new_job); // hash[jobid] = pointer to the new element in linked list
 
@@ -376,9 +358,9 @@ JobsList::JobEntry *JobsList::getJobById(int jobId) {
     //! maybe need to handle errors like non-existing jobId or empty list
     if (job_ids.find(jobId) == job_ids.end()) {
 
-        throw std::exception(); //! error, not a valid job id
+        throw exception(); //! error, not a valid job id
     }
-    std::list<JobEntry *>::iterator it = job_ids[jobId];
+    list<JobEntry *>::iterator it = job_ids[jobId];
     return *it;
 
 }
@@ -386,10 +368,10 @@ JobsList::JobEntry *JobsList::getJobById(int jobId) {
 void JobsList::removeJobById(int jobId) {
     //! maybe need to handle errors like non-existing jobId or empty list
     if (job_ids.find(jobId) == job_ids.end()) {
-        throw std::exception(); //! error, not a valid job id
+        throw exception(); //! error, not a valid job id
     }
     //? should I free the data before erasing?
-    std::list<JobEntry *>::iterator it = job_ids[jobId];
+    list<JobEntry *>::iterator it = job_ids[jobId];
     jobs.erase(it);
     job_ids.erase(jobId);
 
@@ -408,7 +390,7 @@ JobsList::JobEntry *JobsList::getLastStoppedJob() {
         }
     }
     //! no job has stopped, throw error
-    throw std::exception();
+    throw exception();
 }
 
 int JobsList::findJobId(int pid) {
@@ -418,13 +400,13 @@ int JobsList::findJobId(int pid) {
         }
     }
     //! should not get here, must mean pid not a process running in bg or stopped
-    throw std::exception();
+    throw exception();
 }
 
 JobsList::JobsList() {
     max_jobId = 0;
     jobs = list<JobEntry *>();
-    job_ids = unordered_map<int, std::list<JobEntry *>::iterator>();
+    job_ids = unordered_map<int, list<JobEntry *>::iterator>();
 }
 
 bool JobsList::isEmpty() const {
@@ -438,7 +420,7 @@ bool JobsList::jobExists(int jobId) {
     return true;
 }
 
-int Command::getPid() const {
+int Command::getCommandPid() const {
     return pid;
 }
 
@@ -462,7 +444,7 @@ JobsList::JobEntry::JobEntry(int pid, int job_id, const char *cmd_input, bool st
                                                                                                             time_entered(
                                                                                                                     start_time) {}
 
-int JobsList::JobEntry::getPid() const {
+int JobsList::JobEntry::getJobPid() const {
     return pid;
 }
 
@@ -500,3 +482,99 @@ BackgroundCommand::BackgroundCommand(const char *cmd_line, JobsList *jobs, int j
 ExternalCommand::ExternalCommand(const char *cmd_line) : Command(cmd_line) {
 
 }
+
+/**                           showpid Function                                  **/
+ShowPidCommand::ShowPidCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
+
+void ShowPidCommand::execute()
+{
+    cout << "smash pid is " << getpid() << endl;
+}
+
+GetCurrDirCommand::GetCurrDirCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
+
+void GetCurrDirCommand::execute()
+{
+    char buf[PATH_MAX];
+    if (getcwd(buf, sizeof(buf)) == NULL)
+    {
+        perror("smash error: getcwd failed");
+        return;
+    }
+    cout << buf << endl;
+
+}
+
+ChangeDirCommand::ChangeDirCommand(const char *cmd_line, string &plastPwd) : BuiltInCommand(cmd_line), plastPwd(plastPwd) {}
+
+void ChangeDirCommand::execute()
+{
+
+    char *args[COMMAND_MAX_ARGS];
+    int args_amount = _parseCommandLine(cmd_line, args);
+    if (args_amount != 2)
+    {
+        cerr << "smash error: cd: too many arguments" << endl;
+        return;
+    }
+
+    //saving my current dir
+    char buf[PATH_MAX];
+    if (getcwd(buf, sizeof(buf)) == NULL)
+    {
+        perror("smash error: getcwd failed");
+        return;
+    }
+
+    if (!strcmp(args[1], "-"))
+    {
+        if (plastPwd == "")
+        {
+            cerr << "smash error: cd: OLDPWD not set" << endl;
+            return;
+        }
+        if(chdir(plastPwd.c_str()) == -1)
+        {
+            perror("smash error: chdir failed");
+            return;
+        }
+    }
+    else
+    {
+        if(chdir(args[1]) == -1)
+        {
+            perror("smash error: chdir failed");
+            return;
+        }
+    }
+    plastPwd = string(buf);
+}
+
+KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line), extra_jobs(jobs) {}
+
+void KillCommand::execute()
+{
+    char *args[COMMAND_MAX_ARGS];
+    JobsList::JobEntry* job = nullptr;
+    int args_amount = _parseCommandLine(cmd_line, args);
+    if (args_amount != 3)
+    {
+        cerr << "smash error: kill: invalid arguments" << endl;
+        return;
+    }
+
+    try {
+        job = extra_jobs->getJobById(atoi(args[2]));
+    } catch (...) {
+        cerr << "smash error: kill: job-id " << args[2] << " does not exist" << endl;
+        return;
+    }
+
+    if (kill(job->getJobPid(), abs(atoi(args[1]))) == -1)
+    {
+        perror("smash error: kill failed");
+    }
+}
+
+
+/// TODO quit !!!!!

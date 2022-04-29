@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CLionExternalBuildManager">
+    <target id="a6322283-89b2-4c04-a302-8707f96f140f" name="Libmake" defaultType="TOOL">
+      <configuration id="d55f9671-05ee-4df8-8352-eac65fb9e40b" name="Libmake" toolchainName="WSL">
+        <build type="TOOL">
+          <tool actionId="Tool_External Tools_make" />
+        </build>
+        <clean type="TOOL">
+          <tool actionId="Tool_External Tools_clean" />
+        </clean>
+      </configuration>
+    </target>
+  </component>
+</project>

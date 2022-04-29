@@ -4,10 +4,21 @@
 #include <ctime>
 #include <list>
 #include <unordered_map>
+#include <unistd.h>
+#include <string.h>
+#include <iostream>
+#include <vector>
+#include <sstream>
+#include <sys/wait.h>
+#include <iomanip>
+#include <time.h>
+#include <utime.h>
+#include <cstring>
+#include "signal.h"
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
-
+#define PATH_MAX (4096)
 class Command {
 // TODO: Add your data members
 protected:
@@ -24,7 +35,7 @@ public:
     //virtual void cleanup();
 
     // TODO: Add your extra methods if needed
-    int getPid() const;
+    int getCommandPid() const;
     const char* getLine();
     void setPid(int new_pid);
 };
@@ -68,9 +79,11 @@ public:
 };
 
 class ChangeDirCommand : public BuiltInCommand {
-// TODO: Add your data members public:
-// ? add last directory
-    ChangeDirCommand(const char *cmd_line, char **plastPwd);
+// TODO: Add your data members
+public:
+    std::string &plastPwd;
+
+    ChangeDirCommand(const char *cmd_line, std::string &plastPwd);
 
     virtual ~ChangeDirCommand() {}
 
@@ -121,7 +134,7 @@ public:
     public:
         JobEntry(int pid, int job_id, const char *cmd_input, bool stopped, time_t start_time);
 
-        int getPid() const;
+        int getJobPid() const;
 
         bool getStopped() const;
 
@@ -179,6 +192,7 @@ public:
 
 class KillCommand : public BuiltInCommand {
     // TODO: Add your data members
+    JobsList *extra_jobs;
 public:
     KillCommand(const char *cmd_line, JobsList *jobs);
 
@@ -236,10 +250,10 @@ private:
     // TODO: Add your data members
     std::string curr_prompt = "smash> ";
     SmallShell();
-
 public:
     JobsList extra_jobs;
     const std::string default_prompt = "smash> ";
+    std::string pLastPwd = "";
 
     const std::string& getCurrPrompt();
     void setCurrPrompt(const std::string& s);
