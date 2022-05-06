@@ -5,16 +5,17 @@
 #include <list>
 #include <unordered_map>
 #include <unistd.h>
-#include <string.h>
+#include <cstring>
 #include <iostream>
 #include <vector>
 #include <sstream>
 #include <sys/wait.h>
 #include <iomanip>
-#include <time.h>
+#include <ctime>
 #include <utime.h>
 #include <cstring>
 #include "signal.h"
+#include <fstream>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -154,7 +155,7 @@ public:
 public:
     JobsList();
 
-    ~JobsList() = default; //? defualt or need to destruct the data structures and data inside
+    ~JobsList() = default; //? default or need to destruct the data structures and data inside
 
     void addJob(Command *cmd, bool isStopped = false);
 
@@ -228,11 +229,15 @@ public:
 
 class TailCommand : public BuiltInCommand {
 public:
-    TailCommand(const char *cmd_line);
+    explicit TailCommand(const char *cmd_line);
+
+    static size_t checkSyntaxTail(const char *line, char **args, bool *valid);
 
     virtual ~TailCommand() {}
 
     void execute() override;
+
+    static size_t count_lines(char buf[4096]);
 };
 
 class TouchCommand : public BuiltInCommand {
@@ -242,6 +247,8 @@ public:
     virtual ~TouchCommand() {}
 
     void execute() override;
+
+    static bool checkSyntaxTouch(const char *line, char *pString[20]);
 };
 
 
@@ -277,7 +284,7 @@ public:
 
     static bool isNumber(char *string);
 
-    static int checkSyntax(const char *line, char **args);
+    static int checkSyntaxForeGroundBackground(const char *line, char **args);
 
     bool cmdIsChprompt(const char *line);
 };

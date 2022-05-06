@@ -16,6 +16,10 @@ using namespace std;
 #define MAX_PROCESSES_AMOUNT (100)
 
 #define NO_PID (-1)
+#define TAIL_MAX_AMOUNT (3)
+#define TAIL_MIN_AMOUNT (2)
+#define DEFAULT_LINE_AMOUNT (10)
+
 #endif
 
 
@@ -101,24 +105,12 @@ Command *SmallShell::CreateCommand(const char *new_cmd) {
         return new JobsCommand(cmd_line, &extra_jobs);
 
     } else if (firstWord == "fg") {
-        char *args[COMMAND_MAX_ARGS];
-        int job_number = checkSyntax(cmd_line, args);
-        if (job_number < LAST_JOB) {
-            cerr << "smash error: fg: invalid arguments" << endl;
-            throw exception(); //? or return nullptr
-        }
-        return new ForegroundCommand(cmd_line, &extra_jobs, job_number);
+        return new ForegroundCommand(cmd_line, &extra_jobs, LAST_JOB);
 
     } else if (firstWord == "bg") {
-        char *args[COMMAND_MAX_ARGS];
-        int job_number = checkSyntax(cmd_line, args);
-        if (job_number < LAST_JOB) {
-            cerr << "smash error: bg: invalid arguments" << endl;
-            throw exception(); //? or return nullptr
-        }
-        return new BackgroundCommand(cmd_line, &extra_jobs, job_number);
+        return new BackgroundCommand(cmd_line, &extra_jobs, LAST_JOB);
+
     } else if (firstWord == "showpid") {
-        //? check if needed to check in if the &
         return new ShowPidCommand(cmd_line);
     } else if (firstWord == "pwd") {
         return new GetCurrDirCommand(cmd_line);
@@ -126,7 +118,15 @@ Command *SmallShell::CreateCommand(const char *new_cmd) {
         return new ChangeDirCommand(cmd_line, pLastPwd);
     } else if (firstWord == "kill") {
         return new KillCommand(cmd_line, &extra_jobs);
-    } else {
+    }
+
+    else if(firstWord == "tail"){
+        return new TailCommand(cmd_line);
+    }
+    else if(firstWord == "touch"){
+        return new TouchCommand(cmd_line);
+    }
+    else {
         //must be an externalCommand
         return new ExternalCommand(cmd_line);
     }
@@ -157,6 +157,15 @@ void JobsCommand::execute() {
 
 void ForegroundCommand::execute() {
 //the function brings either a bg process or a stopped process to fg
+
+    char *args[COMMAND_MAX_ARGS];
+    int job_number = SmallShell::checkSyntaxForeGroundBackground(cmd_line, args);
+    if (job_number < LAST_JOB) {
+        cerr << "smash error: fg: invalid arguments" << endl;
+        return;
+    }
+    this->jobId = job_number;
+
     if (this->jobId != LAST_JOB && !jobs_list_fg->jobExists(this->jobId)) {
 
         cerr << "smash error: fg: job-id " << this->jobId <<" does not exist" << endl;
@@ -191,6 +200,14 @@ void ForegroundCommand::execute() {
 
 
 void BackgroundCommand::execute() {
+    char *args[COMMAND_MAX_ARGS];
+    int job_number = SmallShell::checkSyntaxForeGroundBackground(cmd_line, args);
+    if (job_number < LAST_JOB) {
+        cerr << "smash error: bg: invalid arguments" << endl;
+        throw exception(); //? or return nullptr
+    }
+
+    this->jobIdBackground = job_number;
     //the function brings a stopped process to bg
     if (this->jobIdBackground != LAST_JOB && !jobs_list_background->jobExists(this->jobIdBackground)) {
         cerr << "smash error: bg: job-id " << this->jobIdBackground <<" does not exist" << endl;
@@ -228,6 +245,9 @@ void ExternalCommand::execute() {
     char* args[COMMAND_MAX_ARGS];
     _parseCommandLine(cmd_line, args);
     pid_t c_pid = fork();
+    if(c_pid == -1){
+        perror("smash error: fork failed");
+    }
     char* run_in_bash = (char*) malloc(sizeof(char*) * strlen(cmd_line));
     strcpy(run_in_bash, cmd_line);
     _removeBackgroundSign(run_in_bash);
@@ -254,6 +274,109 @@ void ExternalCommand::execute() {
             waitpid(c_pid, nullptr, 0); //? should I save the status? Also, should I save ethe return value?
         }
     }
+}
+
+void TailCommand::execute() {
+    char* args[COMMAND_MAX_ARGS];
+    bool valid;
+    int args_num;
+    size_t lines_from_end = checkSyntaxTail(cmd_line, args, &valid);
+    args_num = _parseCommandLine(cmd_line, args);
+    if(!valid){
+        cerr << "smash error: tail: invalid arguments" << endl;
+        return;
+    }
+
+    size_t i, count;
+     string file_name =  _trim(args[args_num - 1]);
+    try{
+        count = count_lines((char*)file_name.c_str());
+    }
+    catch(std::exception&){
+        return; //? already printed the error, so is there something to do here?
+    }
+
+    string line;
+    if(count < lines_from_end){
+        lines_from_end = count;
+    }
+
+    std::ifstream tail_file(file_name, std::ifstream::in); //if not working then open will print the error
+    if(!tail_file.is_open()){
+        perror("smash error: something failed"); //? what to write?
+        return; //? throw exception?
+    }
+
+    for (i = 0; i < count - lines_from_end; ++i){
+        getline(tail_file, line); /* read and discard: skip line */
+    }
+    while (getline(tail_file, line)){
+        cout << line << endl;
+    }
+    tail_file.close();
+
+}
+
+void TouchCommand::execute() {
+    char* args[COMMAND_MAX_ARGS];
+    bool valid;
+    int args_num;
+    valid = checkSyntaxTouch(cmd_line, args);
+    args_num = _parseCommandLine(cmd_line, args);
+    if(!valid){
+        cerr << "smash error: touch: invalid arguments" << endl;
+        return;
+    }
+    string time_str =  _trim(args[args_num - 1]);
+    const char* file_str = _trim(args[1]).c_str();
+    std::ifstream f(file_str, std::ifstream::in); //if not working then open will print the error
+    if(!f.is_open()){
+        perror("smash error: something failed"); //? what to write?
+        return; //? throw exception?
+    }
+    f.close();
+    std::string delimiter = ":";
+    size_t curr_index;
+    int time_arr[6];
+    for (int & i : time_arr) {
+        curr_index = time_str.find(delimiter);
+        i = stoi(time_str.substr(0, curr_index));
+        time_str = time_str.substr(curr_index + 1);
+
+    }
+    struct tm new_file_time = {
+            .tm_sec = time_arr[0],
+            .tm_min = time_arr[1],
+            .tm_hour = time_arr[2],
+            .tm_mday = time_arr[3],
+            .tm_mon = time_arr[4] - 1,
+            .tm_year = time_arr[5] - 1900,
+            .tm_wday = 0,
+            .tm_yday = 0,
+            .tm_isdst = 0
+    };
+
+    tm *time_info = &new_file_time;
+    time_t time_ret = mktime(time_info);
+    if(time_ret == -1){
+        perror("smash error: mktime failed");
+        return;
+    }
+    const struct utimbuf time_buf = {time_ret, time_ret};
+    int ret_utime = utime(file_str, &time_buf);
+    if(ret_utime == -1){
+        perror("smash error: utime failed");
+        return;
+    }
+
+
+
+
+
+
+
+
+
 }
 
 const string &SmallShell::getCurrPrompt() {
@@ -287,7 +410,7 @@ bool SmallShell::isNumber(char *string) {
     return true;
 }
 
-int SmallShell::checkSyntax(const char *line, char **args) {
+int SmallShell::checkSyntaxForeGroundBackground(const char *line, char **args) {
     int job;
     int args_amount = _parseCommandLine(line, args);
 
@@ -550,7 +673,12 @@ void ChangeDirCommand::execute()
     plastPwd = string(buf);
 }
 
+
 KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line), extra_jobs(jobs) {}
+
+
+
+
 
 void KillCommand::execute()
 {
@@ -576,5 +704,58 @@ void KillCommand::execute()
     }
 }
 
+TailCommand::TailCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {
+}
 
-/// TODO quit !!!!!
+size_t TailCommand::checkSyntaxTail(const char *line, char **args, bool *valid) {
+    int arg_amount = _parseCommandLine(line, args);
+    if(arg_amount > TAIL_MAX_AMOUNT || arg_amount < TAIL_MIN_AMOUNT){
+        *valid = false;
+        return 0;
+    }
+    if(arg_amount == TAIL_MIN_AMOUNT){
+        *valid = true;
+        return DEFAULT_LINE_AMOUNT;
+    }
+    else{
+        // * three parameters and the second one is a number
+        std::string number_str = args[1];
+        std::string sub = number_str.substr(1);
+        const char* c_sub = sub.c_str();
+        // moving to char* the number without the negative sign
+
+        if(!SmallShell::isNumber((char*)c_sub) || number_str.at(0) != '-') {
+            *valid = false;
+            return 0;
+        }
+        *valid = true;
+        return std::stoul(number_str.substr(1));
+    }
+}
+
+size_t TailCommand::count_lines(char *buf) {
+    std::ifstream tail_file(buf, std::ifstream::in);
+    if(!tail_file.is_open()){
+        perror("smash error: something failed"); //? what to write here??
+        throw std::exception();
+    }
+    string line;
+    size_t counter = 0;
+    while (getline(tail_file, line)){
+       counter++;
+    }
+    tail_file.close();
+    return counter;
+}
+
+TouchCommand::TouchCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {
+
+}
+
+bool TouchCommand::checkSyntaxTouch(const char *line, char **args) {
+    int args_len = _parseCommandLine(line, args);
+    if(args_len != 3){
+        return false;
+    }
+    return true;
+}
