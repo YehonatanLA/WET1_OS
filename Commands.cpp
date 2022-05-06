@@ -1,5 +1,5 @@
 #include "Commands.h"
-
+#include <fcntl.h>
 
 using namespace std;
 
@@ -14,6 +14,7 @@ using namespace std;
 #define FUNC_EXIT()
 #define LAST_JOB (-1)
 #define MAX_PROCESSES_AMOUNT (100)
+#define KILL_SIGNAL_NUM (9)
 
 #define NO_PID (-1)
 #define TAIL_MAX_AMOUNT (3)
@@ -87,6 +88,18 @@ SmallShell::~SmallShell() {
 // TODO: add your implementation
 }
 
+int findSign(const char *cmd_line, string sign)
+{
+    char *args[COMMAND_MAX_ARGS];
+    int size = _parseCommandLine(cmd_line, args);
+
+    for (int i = 0; i < size; i++) {
+        if (!strcmp(args[i], sign.c_str()))
+            return i;
+    }
+    return -1;
+}
+
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
@@ -97,7 +110,11 @@ Command *SmallShell::CreateCommand(const char *new_cmd) {
     string cmd_s = _trim(string(cmd_line));
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
-    if (firstWord == "chprompt") {
+    if ( findSign(cmd_line, ">") >=0 || findSign(cmd_line, ">>") >=0 ) {
+        return new RedirectionCommand(cmd_line);
+    }
+
+    else if (firstWord == "chprompt") {
 
         saveChangePrompt(cmd_line);
 
@@ -118,8 +135,9 @@ Command *SmallShell::CreateCommand(const char *new_cmd) {
         return new ChangeDirCommand(cmd_line, pLastPwd);
     } else if (firstWord == "kill") {
         return new KillCommand(cmd_line, &extra_jobs);
+    } else if (firstWord == "quit") {
+        return new QuitCommand(cmd_line, &extra_jobs);
     }
-
     else if(firstWord == "tail"){
         return new TailCommand(cmd_line);
     }
@@ -759,3 +777,157 @@ bool TouchCommand::checkSyntaxTouch(const char *line, char **args) {
     }
     return true;
 }
+
+QuitCommand::QuitCommand(const char *cmd_line, JobsList *jobs):BuiltInCommand(cmd_line),extra_jobs(jobs){}
+
+void QuitCommand::execute()
+{
+    char *args[COMMAND_MAX_ARGS];
+    int args_amount = _parseCommandLine(cmd_line, args);
+     if (args_amount > 1 && !strcmp(args[1], "kill"))
+     {
+         list<JobsList::JobEntry *>::iterator it;
+         cout << "smash: sending SIGKILL signal to " << extra_jobs->jobs.size() << " jobs:" << endl;
+         for (it = (extra_jobs->jobs).begin(); it != (extra_jobs->jobs).end(); ++it)
+         {
+             cout << (*it)->getJobPid() << ": " << (*it)->getCmdInput() << endl;
+             if (kill((*it)->getJobPid(),KILL_SIGNAL_NUM) == -1)
+             {
+                 perror("smash error: kill failed");
+             }
+         }
+     }
+    exit(EXIT_SUCCESS);
+}
+
+
+
+
+RedirectionCommand::RedirectionCommand(const char *cmd_line) : Command(cmd_line) {}
+
+void RedirectionCommand::execute()
+{
+
+    char* args[COMMAND_MAX_ARGS];
+    _parseCommandLine(cmd_line, args);
+    char executed_cmd[strlen(cmd_line) + 1];
+    strcpy(executed_cmd, cmd_line);
+
+    int sign_place_one = findSign(cmd_line, ">");
+    int sign_place_two = findSign(cmd_line, ">>");
+    if (sign_place_one != -1)
+    {
+        pid_t pid = fork();
+        if (pid == 0)
+        {
+            close(1);
+            open(args[sign_place_one + 1], O_CREAT | O_RDWR | O_TRUNC, "w");
+            char* sym_pos = strstr(executed_cmd, ">");
+            *sym_pos = '\0';
+            (SmallShell::getInstance()).executeCommand(executed_cmd);
+            exit(0);
+        } else {
+            wait(NULL);
+        }
+        return;
+    }
+    if (sign_place_two != -1)
+    {
+        pid_t pid = fork();
+        if (pid == 0)
+        {
+            close(1);
+            open(args[sign_place_two + 1], O_CREAT | O_APPEND | O_RDWR, "w");
+            char* sym_pos = strstr(executed_cmd, ">");
+            *sym_pos = '\0';
+            (SmallShell::getInstance()).executeCommand(executed_cmd);
+            exit(0);
+        } else {
+            wait(NULL);
+        }
+        return;
+
+    }
+    return;
+
+}
+
+
+PipeCommand::PipeCommand(const char *cmd_line) : Command(cmd_line) {}
+
+void PipeCommand::execute()
+{
+
+    char* args[COMMAND_MAX_ARGS];
+    _parseCommandLine(cmd_line, args);
+    char executed_cmd[strlen(cmd_line) + 1];
+    strcpy(executed_cmd, cmd_line);
+
+    int my_pipe[2];
+    pipe(my_pipe);
+
+    int sign_place_one = findSign(cmd_line, "|");
+    int sign_place_two = findSign(cmd_line, "|&");
+    if (sign_place_one != -1)
+    {
+        if (fork() == 0)
+        {
+            if (fork() == 0)
+            {
+                dup2(my_pipe[0], 0);
+                close(my_pipe[0]);
+                close(my_pipe[1]);
+                char *sym_pos = strstr(executed_cmd, "|");
+                wait(NULL);
+                (SmallShell::getInstance()).executeCommand(sym_pos + 1);
+                exit(EXIT_SUCCESS);
+            } else
+            {
+                dup2(my_pipe[1], 1);
+                close(my_pipe[0]);
+                close(my_pipe[1]);
+                char *sym_pos = strstr(executed_cmd, "|");
+                *sym_pos = '\0';
+                (SmallShell::getInstance()).executeCommand(executed_cmd);
+                exit(EXIT_SUCCESS);
+            }
+        } else {
+            close(my_pipe[0]);
+            close(my_pipe[1]);
+            wait(NULL);
+        }
+        return;
+    }
+    if (sign_place_two != -1)
+    {
+        if (fork() == 0)
+        {
+            if (fork() == 0)
+            {
+                dup2(my_pipe[0], 0);
+                close(my_pipe[0]);
+                close(my_pipe[1]);
+                char *sym_pos = strstr(executed_cmd, "|");
+                wait(NULL);
+                (SmallShell::getInstance()).executeCommand(sym_pos + 1);
+                exit(EXIT_SUCCESS);
+            } else
+            {
+                dup2(my_pipe[1], 2);
+                close(my_pipe[0]);
+                close(my_pipe[1]);
+                char *sym_pos = strstr(executed_cmd, "|");
+                *sym_pos = '\0';
+                (SmallShell::getInstance()).executeCommand(executed_cmd);
+                exit(EXIT_SUCCESS);
+            }
+        } else {
+            close(my_pipe[0]);
+            close(my_pipe[1]);
+            wait(NULL);
+        }
+    }
+
+}
+
+
