@@ -125,6 +125,7 @@ public:
 
 
 class JobsList {
+
 public:
     class JobEntry {
         int pid;
@@ -181,6 +182,8 @@ public:
     bool isEmpty() const;
 
     bool jobExists(int jobId);
+
+    int AlreadyExists(int pid);
 };
 
 class JobsCommand : public BuiltInCommand {

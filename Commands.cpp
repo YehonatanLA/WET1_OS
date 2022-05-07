@@ -163,7 +163,6 @@ void SmallShell::executeCommand(const char *cmd_line) {
     if(cmdIsChprompt(cmd_line)){
         return;
     }
-    //! if this is a external command, we need to make sure that we are forking and execv ing the process (and something about setpgrp)
     cmd->execute();
 }
 
@@ -210,7 +209,7 @@ void ForegroundCommand::execute() {
 
     }
     cout << chosen_job->getCmdInput() << " : " << chosen_job->getJobPid() << "\n";
-    waitpid(chosen_job->getJobPid(), nullptr, 0);
+    waitpid(chosen_job->getJobPid(), nullptr, WUNTRACED);
     jobs_list_fg->removeJobById(jobId);
 
 
@@ -222,7 +221,7 @@ void BackgroundCommand::execute() {
     int job_number = SmallShell::checkSyntaxForeGroundBackground(cmd_line, args);
     if (job_number < LAST_JOB) {
         cerr << "smash error: bg: invalid arguments" << endl;
-        throw exception(); //? or return nullptr
+        return;
     }
 
     this->jobIdBackground = job_number;
@@ -284,12 +283,12 @@ void ExternalCommand::execute() {
             //runs in background
 
             SmallShell& smash = SmallShell::getInstance();
-          pid = int(c_pid); //changing the default pid to relevant pid
+            pid = int(c_pid); //changing the default pid to relevant pid
             smash.extra_jobs.addJob(this, false);
         }
         else{
             //runs in the foreground
-            waitpid(c_pid, nullptr, 0); //? should I save the status? Also, should I save ethe return value?
+            waitpid(c_pid, nullptr, 0);
         }
     }
 }
@@ -311,7 +310,7 @@ void TailCommand::execute() {
         count = count_lines((char*)file_name.c_str());
     }
     catch(std::exception&){
-        return; //? already printed the error, so is there something to do here?
+        return;
     }
 
     string line;
@@ -321,8 +320,8 @@ void TailCommand::execute() {
 
     std::ifstream tail_file(file_name, std::ifstream::in); //if not working then open will print the error
     if(!tail_file.is_open()){
-        perror("smash error: something failed"); //? what to write?
-        return; //? throw exception?
+        perror("smash error: open failed");
+        return;
     }
 
     for (i = 0; i < count - lines_from_end; ++i){
@@ -349,8 +348,8 @@ void TouchCommand::execute() {
     const char* file_str = _trim(args[1]).c_str();
     std::ifstream f(file_str, std::ifstream::in); //if not working then open will print the error
     if(!f.is_open()){
-        perror("smash error: something failed"); //? what to write?
-        return; //? throw exception?
+        perror("smash error: open failed");
+        return;
     }
     f.close();
     std::string delimiter = ":";
@@ -413,7 +412,7 @@ void SmallShell::saveChangePrompt(const char *cmd) {
     if (num_args == 1) {
         smash.setCurrPrompt(smash.default_prompt);
     } else {
-        string new_prompt = string(args[1]).append(string("> ")); //? check if works
+        string new_prompt = string(args[1]).append(string("> "));
         smash.setCurrPrompt(new_prompt);
     }
 }
@@ -437,7 +436,7 @@ int SmallShell::checkSyntaxForeGroundBackground(const char *line, char **args) {
     } else if (args_amount == 1) {
         job = LAST_JOB;
     } else {
-        job = LAST_JOB - 1; // * not a valid job number
+        job = LAST_JOB - 1;
     }
     return job;
 }
@@ -452,16 +451,25 @@ bool SmallShell::cmdIsChprompt(const char *line) {
 void JobsList::addJob(Command *cmd, bool isStopped) {
     //the function receives a command and if the proccess stopped and puts it in the jobs list
     removeFinishedJobs();
-    if (jobs.size() == MAX_PROCESSES_AMOUNT) {
-        //! problem, not sure what to do
-        throw exception();
+    int curr_job_id;
+
+    if((curr_job_id = AlreadyExists(cmd->getCommandPid())) != -1){
+        JobEntry* curr_entry = getJobById(curr_job_id);
+        time_t curr_time = time(nullptr);
+        if(curr_time == -1){
+            perror("smash error: time failed");
+            return;
+        }
+        curr_entry->time_entered = curr_time;
     }
-    //? should I check if the job is added again? in page 7 it says to reset timer, but how do I check if it was added in the first place?
-    // * unless of course it is meant that I add the same job while it is already in job list, somehow
     max_jobId++;
-    // * check if needed to copy string
-    JobEntry *new_job = new JobEntry(cmd->getCommandPid(), max_jobId, cmd->getLine(), isStopped, time(nullptr));
-    //! need to delete the jobEntry in destructor for clearing memory
+    time_t time_added = time(nullptr);
+
+    if(time_added == -1){
+        perror("smash error: time failed");
+        return;
+    }
+    JobEntry *new_job = new JobEntry(cmd->getCommandPid(), max_jobId, cmd->getLine(), isStopped, time_added);
     job_ids[max_jobId] = jobs.insert(jobs.end(), new_job); // hash[jobid] = pointer to the new element in linked list
 
 
@@ -496,7 +504,6 @@ void JobsList::removeFinishedJobs() {
 }
 
 JobsList::JobEntry *JobsList::getJobById(int jobId) {
-    //! maybe need to handle errors like non-existing jobId or empty list
     if (job_ids.find(jobId) == job_ids.end()) {
 
         throw exception(); //! error, not a valid job id
@@ -511,7 +518,7 @@ void JobsList::removeJobById(int jobId) {
     if (job_ids.find(jobId) == job_ids.end()) {
         throw exception(); //! error, not a valid job id
     }
-    //? should I free the data before erasing?
+
     list<JobEntry *>::iterator it = job_ids[jobId];
     jobs.erase(it);
     job_ids.erase(jobId);
@@ -519,7 +526,9 @@ void JobsList::removeJobById(int jobId) {
 }
 
 JobsList::JobEntry *JobsList::getLastJob(int *lastJobId) {
-    //! maybe need to handle errors like non-existing jobId or empty list
+    if (job_ids.find(*lastJobId) == job_ids.end()) {
+        throw exception(); //! error, not a valid job id
+    }
     JobEntry *last_entry = jobs.back();
     return last_entry;
 }
@@ -559,6 +568,14 @@ bool JobsList::jobExists(int jobId) {
         return false;
 
     return true;
+}
+
+int JobsList::AlreadyExists(int pid) {
+    for(auto it = jobs.begin(); it != jobs.end(); ++it){
+        if((*it)->pid == pid)
+            return (*it)->job_id;
+    }
+    return -1;
 }
 
 int Command::getCommandPid() const {
@@ -754,7 +771,7 @@ size_t TailCommand::checkSyntaxTail(const char *line, char **args, bool *valid) 
 size_t TailCommand::count_lines(char *buf) {
     std::ifstream tail_file(buf, std::ifstream::in);
     if(!tail_file.is_open()){
-        perror("smash error: something failed"); //? what to write here??
+        perror("smash error: open failed");
         throw std::exception();
     }
     string line;
