@@ -29,6 +29,8 @@ protected:
 public:
     explicit Command(const char *cmd_line);
 
+    Command(int pid_copy, const char *cmd_line_copy);
+
     virtual ~Command() = default;
 
     virtual void execute() = 0;
@@ -264,6 +266,8 @@ public:
     JobsList extra_jobs;
     const std::string default_prompt = "smash> ";
     std::string pLastPwd = "";
+    pid_t smash_pid = getpid();
+    Command* curr_cmd;
 
     const std::string& getCurrPrompt();
     void setCurrPrompt(const std::string& s);
