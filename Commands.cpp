@@ -246,6 +246,7 @@ void BackgroundCommand::execute() {
         if (!stopped_job->getStopped()) {
             cerr << "smash error: bg: job-id " << stopped_job->getJobId() << " is already running in the background"
                  << endl;
+            return;
         }
     }
     cout << stopped_job->getCmdInput() << " : " << stopped_job->getJobPid() << endl;
@@ -266,7 +267,7 @@ void ExternalCommand::execute() {
         perror("smash error: fork failed");
     }
 
-    char *run_in_bash = (char *) malloc(sizeof(char *) * strlen(cmd_line));
+    char *run_in_bash = (char *) malloc(strlen(cmd_line));
     strcpy(run_in_bash, cmd_line);
     _removeBackgroundSign(run_in_bash);
 
@@ -807,9 +808,11 @@ void RedirectionCommand::execute() {
             char *sym_pos = strstr(executed_cmd, ">");
             *sym_pos = '\0';
             (SmallShell::getInstance()).executeCommand(executed_cmd);
+            sync();
+            close(1);
             exit(0);
         } else {
-            wait(NULL);
+            waitpid(pid, nullptr, WUNTRACED);
         }
         return;
     }
@@ -821,9 +824,11 @@ void RedirectionCommand::execute() {
             char *sym_pos = strstr(executed_cmd, ">");
             *sym_pos = '\0';
             (SmallShell::getInstance()).executeCommand(executed_cmd);
+            sync();
+            close(1);
             exit(0);
         } else {
-            wait(NULL);
+            waitpid(pid, nullptr, WUNTRACED);
         }
         return;
 
@@ -849,7 +854,7 @@ void PipeCommand::execute() {
     int sign_place_two = findSign(cmd_line, "|&");
     if (sign_place_one != -1) {
         if (fork() == 0) {
-            if (fork() == 0) {
+            if (fork() != 0) {
                 dup2(my_pipe[0], 0);
                 close(my_pipe[0]);
                 close(my_pipe[1]);
@@ -863,8 +868,6 @@ void PipeCommand::execute() {
                 close(my_pipe[1]);
                 char *sym_pos = strstr(executed_cmd, "|");
                 *sym_pos = '\0';
-                cout << executed_cmd << endl;
-
                 (SmallShell::getInstance()).executeCommand(executed_cmd);
                 exit(EXIT_SUCCESS);
             }
@@ -877,7 +880,7 @@ void PipeCommand::execute() {
     }
     if (sign_place_two != -1) {
         if (fork() == 0) {
-            if (fork() == 0) {
+            if (fork() != 0) {
                 dup2(my_pipe[0], 0);
                 close(my_pipe[0]);
                 close(my_pipe[1]);
@@ -892,7 +895,6 @@ void PipeCommand::execute() {
                 char *sym_pos = strstr(executed_cmd, "|");
                 *sym_pos = '\0';
                 (SmallShell::getInstance()).executeCommand(executed_cmd);
-
                 exit(EXIT_SUCCESS);
             }
         } else {

@@ -2,10 +2,59 @@
 <project version="4">
   <component name="PublishConfigData" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
-      <paths name="Remote Host (0439ab59-7c37-49da-b21c-260345fa3238)">
+      <paths name="Remote Host (3cf3e7a2-87b1-4001-82c9-8ac345a48687)">
         <serverdata>
           <mappings>
-            <mapping deploy="/tmp/WET" local="$PROJECT_DIR$" />
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Remote Host (6deb7eaf-d1cb-4b94-9dd5-8428aafe8508)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Remote Host (c4c7b56c-e984-46e3-8856-3c2f876dd5c1)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/tmp/WET1_OS" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Remote Host (f75f8623-ce9f-4cf1-aaac-a04913614f0f)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="WSL (4f440aec-ae97-46c9-947b-62d1ef1732a5)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="WSL (ba755aed-22ab-44d1-bd2e-babace9d1c57)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="WSL (e704fefc-7963-4820-843f-2ba313002bcd)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="WSL (fb690e2a-8fa4-46bf-af6d-a4dd20a390ae)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
