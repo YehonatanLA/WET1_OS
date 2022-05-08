@@ -6,23 +6,44 @@
 
 using namespace std;
 #define KILL_SIGNAL_NUM (9)
-
+#define NO_PID (-1)
 
 void ctrlZHandler(int sig_num) {
 	// TODO: Add your implementation
     cout<< "smash: got ctrl-Z" << endl;
-    //add to jobs list
-    kill(getpid(), sig_num);
+    SmallShell& smash = SmallShell::getInstance();
+    int pid = smash.curr_cmd->getCommandPid();
+    if (pid == NO_PID)
+    {
+        return;
+    }
+    else
+    {
+        //Command* command_job = Command(smash.curr_cmd->getLine(), smash.curr_cmd->getCommandPid());
+        smash.extra_jobs.addJob(smash.curr_cmd, true);
+        kill(pid, 19);
+        cout<< "smash: process " << pid << " was stopped" << endl;
 
+    }
 
-    // ? HOW TO SEND SIGSTOP
 }
 //! if stopping sleep, the linux will continue afterwards even though it was stopped
 
 void ctrlCHandler(int sig_num) {
   // TODO: Add your implementation
     cout<< "smash: got ctrl-C" << endl;
-    kill(getpid(), sig_num);
+    SmallShell& smash = SmallShell::getInstance();
+    int pid = smash.curr_cmd->getCommandPid();
+    if (pid == NO_PID)
+    {
+        return;
+    }
+    else
+    {
+        kill(pid, KILL_SIGNAL_NUM);
+        cout<< "smash: process " << pid << " was killed" << endl;
+
+    }
 }
 
 void alarmHandler(int sig_num) {

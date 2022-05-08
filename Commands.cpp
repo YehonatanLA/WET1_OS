@@ -114,6 +114,10 @@ Command *SmallShell::CreateCommand(const char *new_cmd) {
         return new RedirectionCommand(cmd_line);
     }
 
+    else if ( findSign(cmd_line, "|") >=0 || findSign(cmd_line, "|&") >=0 ) {
+        return new PipeCommand(cmd_line);
+    }
+
     else if (firstWord == "chprompt") {
 
         saveChangePrompt(cmd_line);
@@ -159,11 +163,13 @@ void SmallShell::executeCommand(const char *cmd_line) {
     // cmd->execute();
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 
-    Command *cmd = CreateCommand(cmd_line);
+    curr_cmd = CreateCommand(cmd_line);
     if(cmdIsChprompt(cmd_line)){
         return;
     }
     cmd->execute();
+    curr_cmd = nullptr;
+
 }
 
 
@@ -230,7 +236,7 @@ void BackgroundCommand::execute() {
         cerr << "smash error: bg: job-id " << this->jobIdBackground <<" does not exist" << endl;
         return;
     } else if (this->jobIdBackground == LAST_JOB && jobs_list_background->isEmpty()) {
-        cerr << "smash error: bg: jobs list is empty" << endl;
+        cerr << "smash error: bg: there is no stopped jobs to resume" << endl;
         return;
     }
     JobsList::JobEntry* stopped_job;
@@ -247,9 +253,13 @@ void BackgroundCommand::execute() {
     }
     else{
         stopped_job = jobs_list_background->getJobById(this->jobIdBackground);
+        if(stopped_job->getStopped() == false)
+        {
+            cerr << "smash error: bg: job-id " << stopped_job->getJobId() << " is already running in the background" << endl;
+        }
     }
-    cout << stopped_job->getCmdInput() << ": " << this->jobIdBackground;
-     stopped_job->ChangeStopped();
+    cout << stopped_job->getCmdInput() << " : " << this->jobIdBackground << endl;
+    stopped_job->ChangeStopped();
     int ret = kill(stopped_job->getJobPid(), SIGCONT);
     if(ret < 0){
         // * failed to send sigcont to prcess
@@ -265,6 +275,7 @@ void ExternalCommand::execute() {
     if(c_pid == -1){
         perror("smash error: fork failed");
     }
+
     char* run_in_bash = (char*) malloc(sizeof(char*) * strlen(cmd_line));
     strcpy(run_in_bash, cmd_line);
     _removeBackgroundSign(run_in_bash);
@@ -278,17 +289,17 @@ void ExternalCommand::execute() {
         throw exception();
     }
     else{
+        SmallShell& smash = SmallShell::getInstance();
         //we're in the parent process
         if(_isBackgroundCommand(cmd_line)){
             //runs in background
-
-            SmallShell& smash = SmallShell::getInstance();
             pid = int(c_pid); //changing the default pid to relevant pid
             smash.extra_jobs.addJob(this, false);
         }
         else{
             //runs in the foreground
-            waitpid(c_pid, nullptr, 0);
+            pid = int(c_pid);
+            waitpid(c_pid, nullptr, WUNTRACED); //? should I save the status? Also, should I save ethe return value?
         }
     }
 }
@@ -483,7 +494,7 @@ void JobsList::printJobsList() {
         const char *input = job->cmd_input;
         int curr_pid = job->pid;
         time_t status_time = time(nullptr);
-        cout << "[" << curr_job_id << "] " << input << " :" << curr_pid << " " << difftime(status_time, job->time_entered);
+        cout << "[" << curr_job_id << "] " << input << " : " << curr_pid << " " << difftime(status_time, job->time_entered) << " secs" ;
 
         if (job->stopped) {
             cout << " (stopped)";
@@ -590,6 +601,13 @@ Command::Command(const char *cmd_line): cmd_line(cmd_line) {
         pid = NO_PID;
 }
 
+Command::Command(int pid_copy, const char *cmd_line_copy)
+{
+    pid = pid_copy;
+    cmd_line = cmd_line_copy;
+}
+
+
 void Command::setPid(int new_pid) {
     this->pid = new_pid;
 }
@@ -646,7 +664,9 @@ ShowPidCommand::ShowPidCommand(const char *cmd_line) : BuiltInCommand(cmd_line) 
 
 void ShowPidCommand::execute()
 {
-    cout << "smash pid is " << getpid() << endl;
+    SmallShell& smash = SmallShell::getInstance();
+    int pid_smash = smash.smash_pid;
+    cout << "smash pid is " << pid_smash << endl;
 }
 
 GetCurrDirCommand::GetCurrDirCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
@@ -708,12 +728,7 @@ void ChangeDirCommand::execute()
     plastPwd = string(buf);
 }
 
-
 KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line), extra_jobs(jobs) {}
-
-
-
-
 
 void KillCommand::execute()
 {
@@ -817,9 +832,6 @@ void QuitCommand::execute()
     exit(EXIT_SUCCESS);
 }
 
-
-
-
 RedirectionCommand::RedirectionCommand(const char *cmd_line) : Command(cmd_line) {}
 
 void RedirectionCommand::execute()
@@ -869,7 +881,6 @@ void RedirectionCommand::execute()
 
 }
 
-
 PipeCommand::PipeCommand(const char *cmd_line) : Command(cmd_line) {}
 
 void PipeCommand::execute()
@@ -879,6 +890,7 @@ void PipeCommand::execute()
     _parseCommandLine(cmd_line, args);
     char executed_cmd[strlen(cmd_line) + 1];
     strcpy(executed_cmd, cmd_line);
+
 
     int my_pipe[2];
     pipe(my_pipe);
@@ -905,6 +917,8 @@ void PipeCommand::execute()
                 close(my_pipe[1]);
                 char *sym_pos = strstr(executed_cmd, "|");
                 *sym_pos = '\0';
+                cout << executed_cmd << endl;
+
                 (SmallShell::getInstance()).executeCommand(executed_cmd);
                 exit(EXIT_SUCCESS);
             }
@@ -936,6 +950,7 @@ void PipeCommand::execute()
                 char *sym_pos = strstr(executed_cmd, "|");
                 *sym_pos = '\0';
                 (SmallShell::getInstance()).executeCommand(executed_cmd);
+
                 exit(EXIT_SUCCESS);
             }
         } else {
