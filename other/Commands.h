@@ -127,6 +127,7 @@ public:
 
 
 class JobsList {
+
 public:
     class JobEntry {
         int pid;
@@ -184,7 +185,7 @@ public:
 
     bool jobExists(int jobId);
 
-    int findMax();
+    int AlreadyExists(int pid);
 };
 
 class JobsCommand : public BuiltInCommand {
@@ -224,9 +225,10 @@ public:
 
 class BackgroundCommand : public BuiltInCommand {
     // TODO: Add your data members
+    int jobIdBackground;
     JobsList* jobs_list_background;
 public:
-    BackgroundCommand(const char *cmd_line, JobsList *jobs);
+    BackgroundCommand(const char *cmd_line, JobsList *jobs, int job_number);
 
     virtual ~BackgroundCommand() {}
 
