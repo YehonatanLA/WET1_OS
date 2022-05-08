@@ -227,7 +227,7 @@ void BackgroundCommand::execute() {
     int job_number = SmallShell::checkSyntaxForeGroundBackground(cmd_line, args);
     if (job_number < LAST_JOB) {
         cerr << "smash error: bg: invalid arguments" << endl;
-        throw exception(); //? or return nullptr
+        return; //? or return nullptr
     }
 
     this->jobIdBackground = job_number;
@@ -236,7 +236,7 @@ void BackgroundCommand::execute() {
         cerr << "smash error: bg: job-id " << this->jobIdBackground <<" does not exist" << endl;
         return;
     } else if (this->jobIdBackground == LAST_JOB && jobs_list_background->isEmpty()) {
-        cerr << "smash error: bg: jobs list is empty" << endl;
+        cerr << "smash error: bg: there is no stopped jobs to resume" << endl;
         return;
     }
     JobsList::JobEntry* stopped_job;
@@ -253,9 +253,13 @@ void BackgroundCommand::execute() {
     }
     else{
         stopped_job = jobs_list_background->getJobById(this->jobIdBackground);
+        if(stopped_job->getStopped() == false)
+        {
+            cerr << "smash error: bg: job-id " << stopped_job->getJobId() << " is already running in the background" << endl;
+        }
     }
-    cout << stopped_job->getCmdInput() << ": " << this->jobIdBackground;
-     stopped_job->ChangeStopped();
+    cout << stopped_job->getCmdInput() << " : " << this->jobIdBackground << endl;
+    stopped_job->ChangeStopped();
     int ret = kill(stopped_job->getJobPid(), SIGCONT);
     if(ret < 0){
         // * failed to send sigcont to prcess
@@ -481,7 +485,7 @@ void JobsList::printJobsList() {
         const char *input = job->cmd_input;
         int curr_pid = job->pid;
         time_t status_time = time(nullptr);
-        cout << "[" << curr_job_id << "] " << input << " :" << curr_pid << " " << difftime(status_time, job->time_entered);
+        cout << "[" << curr_job_id << "] " << input << " : " << curr_pid << " " << difftime(status_time, job->time_entered) << " secs" ;
 
         if (job->stopped) {
             cout << " (stopped)";
