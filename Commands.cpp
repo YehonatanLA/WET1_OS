@@ -209,6 +209,8 @@ void ForegroundCommand::execute() {
         }
 
     }
+    SmallShell& smash = SmallShell::getInstance();
+    smash.curr_cmd->setPid(chosen_job->getJobPid());
     cout << chosen_job->getCmdInput() << " : " << chosen_job->getJobPid() << "\n";
     waitpid(chosen_job->getJobPid(), nullptr, WUNTRACED);
     jobs_list_fg->removeJobById(jobId);
