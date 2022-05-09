@@ -591,9 +591,10 @@ int JobsList::findMax() {
 }
 
 bool JobsList::findJobByPid(int pid, JobEntry* je) {
-    for(auto &job : jobs){
+    for(auto it = jobs.begin(; ))
+    for(JobEntry* &job : jobs){
         if(job->pid == pid){
-            *je = *job;
+            je = job;
             return true;
         }
     }
