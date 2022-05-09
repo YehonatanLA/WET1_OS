@@ -181,18 +181,20 @@ void ForegroundCommand::execute() {
         return;
     }
     this->jobId = job_number;
+    int args_amount = _parseCommandLine(cmd_line, args);
+    bool is_last = (args_amount == 1);
 
-    if (this->jobId != LAST_JOB && !jobs_list_fg->jobExists(this->jobId)) {
+    if (!is_last && !jobs_list_fg->jobExists(this->jobId)) {
 
         cerr << "smash error: fg: job-id " << this->jobId << " does not exist" << endl;
         return;
-    } else if (this->jobId == LAST_JOB && jobs_list_fg->isEmpty()) {
+    } else if (is_last && jobs_list_fg->isEmpty()) {
         cerr << "smash error: fg: jobs list is empty" << endl;
         return;
     }
     JobsList::JobEntry *chosen_job;
 
-    if (this->jobId == LAST_JOB) {
+    if (is_last) {
         chosen_job = jobs_list_fg->getLastJob(nullptr);
         this->jobId = chosen_job->getJobId();
     } else {
