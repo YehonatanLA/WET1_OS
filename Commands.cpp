@@ -141,6 +141,8 @@ Command *SmallShell::CreateCommand(const char *new_cmd) {
         return new TailCommand(cmd_line);
     } else if (firstWord == "touch") {
         return new TouchCommand(cmd_line);
+    }  else if (firstWord == "") {
+        return new EmptyCommand(cmd_line);
     } else {
         //must be an externalCommand
         return new ExternalCommand(cmd_line);
@@ -164,6 +166,7 @@ void SmallShell::executeCommand(const char *cmd_line) {
     curr_cmd->execute();
     curr_cmd = nullptr;
 }
+
 
 
 void JobsCommand::execute() {
@@ -848,7 +851,7 @@ void RedirectionCommand::execute() {
         pid_t pid = fork();
         if (pid == 0) {
             close(1);
-            open(args[sign_place_one + 1], O_CREAT | O_RDWR | O_TRUNC, "w");
+            open(args[sign_place_one + 1], O_CREAT | O_RDWR | O_TRUNC  , 0655);
             char *sym_pos = strstr(executed_cmd, ">");
             *sym_pos = '\0';
             (SmallShell::getInstance()).executeCommand(executed_cmd);
@@ -864,7 +867,7 @@ void RedirectionCommand::execute() {
         pid_t pid = fork();
         if (pid == 0) {
             close(1);
-            open(args[sign_place_two + 1], O_CREAT | O_APPEND | O_RDWR, "w");
+            open(args[sign_place_two + 1], O_CREAT | O_APPEND | O_RDWR, 0655);
             char *sym_pos = strstr(executed_cmd, ">");
             *sym_pos = '\0';
             (SmallShell::getInstance()).executeCommand(executed_cmd);
@@ -948,6 +951,15 @@ void PipeCommand::execute() {
         }
     }
 
+}
+
+
+
+EmptyCommand::EmptyCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
+
+void EmptyCommand::execute()
+{
+    return;
 }
 
 

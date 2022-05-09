@@ -39,8 +39,9 @@ void ctrlCHandler(int sig_num) {
     }
     else
     {
-        kill(pid, KILL_SIGNAL_NUM);
+        kill(pid, 9);
         cout<< "smash: process " << pid << " was killed" << endl;
+        return;
 
     }
 }
