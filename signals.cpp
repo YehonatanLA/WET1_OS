@@ -20,7 +20,7 @@ void ctrlZHandler(int sig_num) {
     {
         //Command* command_job = Command(smash.curr_cmd->getLine(), smash.curr_cmd->getCommandPid());
         smash.extra_jobs.addJob(smash.curr_cmd, true);
-        kill(pid, 19);
+        kill(pid, SIGSTOP);
         cout<< "smash: process " << pid << " was stopped" << endl;
 
     }

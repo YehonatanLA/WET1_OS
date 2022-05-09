@@ -216,6 +216,7 @@ void ForegroundCommand::execute() {
     smash.curr_cmd->setPid(chosen_job->getJobPid());
     smash.curr_cmd->setLine(chosen_job->getCmdInput());
     cout << chosen_job->getCmdInput() << " : " << chosen_job->getJobPid() << "\n";
+
     waitpid(chosen_job->getJobPid(), nullptr, WUNTRACED);
     jobs_list_fg->removeJobById(jobId);
 
@@ -455,7 +456,11 @@ bool SmallShell::cmdIsChprompt(const char *line) {
 
 void JobsList::addJob(Command *cmd, bool isStopped) {
     //the function receives a command and if the proccess stopped and puts it in the jobs list
-    if(findJobByPid(cmd->getCommandPid())){
+    JobEntry* je;
+    if(findJobByPid(cmd->getCommandPid(), je)){
+        if(je->stopped != isStopped){
+            je->stopped = isStopped;
+        }
         return; // already exists
     }
     removeFinishedJobs();
@@ -585,9 +590,10 @@ int JobsList::findMax() {
     return (max + 1);
 }
 
-bool JobsList::findJobByPid(int pid) {
+bool JobsList::findJobByPid(int pid, JobEntry* je) {
     for(auto &job : jobs){
         if(job->pid == pid){
+            je = job;
             return true;
         }
     }
