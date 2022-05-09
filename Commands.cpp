@@ -222,12 +222,13 @@ void BackgroundCommand::execute() {
         cerr << "smash error: bg: invalid arguments" << endl;
         return; //? or return nullptr
     }
-
+    int args_amount = _parseCommandLine(cmd_line, args);
+    bool is_last = (args_amount == 1);
     //the function brings a stopped process to bg
-    if (job_number != LAST_JOB && !jobs_list_background->jobExists(job_number)) {
+    if (!is_last && !jobs_list_background->jobExists(job_number)) {
         cerr << "smash error: bg: job-id " << job_number << " does not exist" << endl;
         return;
-    } else if (job_number == LAST_JOB && jobs_list_background->isEmpty()) {
+    } else if (is_last && jobs_list_background->isEmpty()) {
         cerr << "smash error: bg: there is no stopped jobs to resume" << endl;
         return;
     }
@@ -410,7 +411,7 @@ void SmallShell::saveChangePrompt(const char *cmd) {
 }
 
 bool SmallShell::isNumber(char *string) {
-    if(string[0] != '-' || !isdigit(string[0])){
+    if(string[0] != '-' && !isdigit(string[0])){
         return false;
     }
     size_t len = strlen(string);
