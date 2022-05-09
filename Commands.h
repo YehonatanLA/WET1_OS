@@ -259,6 +259,16 @@ public:
 };
 
 
+class EmptyCommand : public BuiltInCommand {
+public:
+    EmptyCommand(const char *cmd_line);
+
+    virtual ~EmptyCommand() {}
+
+    void execute() override;
+};
+
+
 class SmallShell {
 private:
     // TODO: Add your data members
