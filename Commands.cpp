@@ -410,8 +410,11 @@ void SmallShell::saveChangePrompt(const char *cmd) {
 }
 
 bool SmallShell::isNumber(char *string) {
+    if(string[0] != '-' || !isdigit(string[0])){
+        return false;
+    }
     size_t len = strlen(string);
-    for (size_t i = 0; i < len; i++) {
+    for (size_t i = 1; i < len; i++) {
         if (!isdigit(string[i])) {
             return false;
         }
@@ -423,7 +426,7 @@ int SmallShell::checkSyntaxForeGroundBackground(const char *line, char **args) {
     int job;
     int args_amount = _parseCommandLine(line, args);
 
-    if (args_amount == 2 && isNumber(args[1])) {
+    if (args_amount == 2 && isNumber((char*)_trim(args[1]).c_str())) {
         job = atoi(args[1]);
     } else if (args_amount == 1) {
         job = LAST_JOB;

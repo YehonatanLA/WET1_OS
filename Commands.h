@@ -15,7 +15,6 @@
 #include <utime.h>
 #include <cstring>
 #include "signal.h"
-#include <fstream>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
