@@ -495,6 +495,7 @@ void JobsList::removeFinishedJobs() {
 
 JobsList::JobEntry *JobsList::getJobById(int jobId) {
     //! maybe need to handle errors like non-existing jobId or empty list
+    removeFinishedJobs();
     if (job_ids.find(jobId) == job_ids.end()) {
 
         throw exception(); //! error, not a valid job id
@@ -518,6 +519,7 @@ void JobsList::removeJobById(int jobId) {
 
 JobsList::JobEntry *JobsList::getLastJob(int *lastJobId) {
     //! maybe need to handle errors like non-existing jobId or empty list
+    removeFinishedJobs();
     JobEntry *last_entry = jobs.back();
     return last_entry;
 }
@@ -553,6 +555,7 @@ bool JobsList::isEmpty() const {
 }
 
 bool JobsList::jobExists(int jobId) {
+    removeFinishedJobs();
     if (job_ids.find(jobId) == job_ids.end())
         return false;
 
