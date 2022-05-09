@@ -287,6 +287,7 @@ void ExternalCommand::execute() {
         if (_isBackgroundCommand(cmd_line)) {
             //runs in background
             pid = int(c_pid); //changing the default pid to relevant pid
+            setPid(pid);
             smash.extra_jobs.addJob(this, false);
         } else {
             //runs in the foreground
