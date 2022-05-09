@@ -455,6 +455,9 @@ bool SmallShell::cmdIsChprompt(const char *line) {
 
 void JobsList::addJob(Command *cmd, bool isStopped) {
     //the function receives a command and if the proccess stopped and puts it in the jobs list
+    if(findJobByPid(cmd->getCommandPid())){
+        return; // already exists
+    }
     removeFinishedJobs();
     if (jobs.size() == MAX_PROCESSES_AMOUNT) {
         //! problem, not sure what to do
@@ -580,6 +583,15 @@ int JobsList::findMax() {
         }
     }
     return (max + 1);
+}
+
+bool JobsList::findJobByPid(int pid) {
+    for(auto &job : jobs){
+        if(job->pid == pid){
+            return true;
+        }
+    }
+    return false;
 }
 
 int Command::getCommandPid() const {

@@ -185,6 +185,8 @@ public:
     bool jobExists(int jobId);
 
     int findMax();
+
+    bool findJobByPid(int pid);
 };
 
 class JobsCommand : public BuiltInCommand {
