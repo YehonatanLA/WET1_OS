@@ -40,6 +40,7 @@ public:
     int getCommandPid() const;
     const char* getLine();
     void setPid(int new_pid);
+    void setLine(const char* new_line);
 };
 
 class BuiltInCommand : public Command {

@@ -211,6 +211,7 @@ void ForegroundCommand::execute() {
     }
     SmallShell& smash = SmallShell::getInstance();
     smash.curr_cmd->setPid(chosen_job->getJobPid());
+    smash.curr_cmd->setLine(chosen_job->getCmdInput());
     cout << chosen_job->getCmdInput() << " : " << chosen_job->getJobPid() << "\n";
     waitpid(chosen_job->getJobPid(), nullptr, WUNTRACED);
     jobs_list_fg->removeJobById(jobId);
@@ -598,6 +599,10 @@ Command::Command(int pid_copy, const char *cmd_line_copy) {
 
 void Command::setPid(int new_pid) {
     this->pid = new_pid;
+}
+
+void Command::setLine(const char* new_line) {
+    this->cmd_line = new_line;
 }
 
 JobsList::JobEntry::JobEntry(int pid, int job_id, const char *cmd_input, bool stopped, time_t start_time) : pid(pid),
