@@ -305,7 +305,7 @@ void TailCommand::execute() {
     }
 
     size_t i, count;
-    string file_name = _trim(args[args_num - 1]);
+    string file_name = _trim(args[args_num - 1]).c_str();
     try {
         count = count_lines((char *) file_name.c_str());
     }
@@ -313,24 +313,28 @@ void TailCommand::execute() {
         return; //? already printed the error, so is there something to do here?
     }
 
-    string line;
     if (count < lines_from_end) {
         lines_from_end = count;
     }
-
-    std::ifstream tail_file(file_name, std::ifstream::in); //if not working then open will print the error
-    if (!tail_file.is_open()) {
-        perror("smash error: something failed"); //? what to write?
-        return; //? throw exception?
+    string line;
+    int fd;
+    if((fd = open(file_name.c_str(), O_RDONLY)) < 0){
+        perror("smash error: open failed");
+        return;
     }
-
     for (i = 0; i < count - lines_from_end; ++i) {
-        getline(tail_file, line); /* read and discard: skip line */
+        readLine(fd, line); /* read and discard: skip line */
+        line.clear();
     }
-    while (getline(tail_file, line)) {
+
+    while (readLine(fd, line)) {
         cout << line << endl;
+        line.clear();
     }
-    tail_file.close();
+    if(close(fd) < 0){
+        perror("smash error: close failed");
+        return;
+    }
 
 }
 
@@ -340,18 +344,13 @@ void TouchCommand::execute() {
     int args_num;
     valid = checkSyntaxTouch(cmd_line, args);
     args_num = _parseCommandLine(cmd_line, args);
+
     if (!valid) {
         cerr << "smash error: touch: invalid arguments" << endl;
         return;
     }
     string time_str = _trim(args[args_num - 1]);
     const char *file_str = _trim(args[1]).c_str();
-    std::ifstream f(file_str, std::ifstream::in); //if not working then open will print the error
-    if (!f.is_open()) {
-        perror("smash error: something failed"); //? what to write?
-        return; //? throw exception?
-    }
-    f.close();
     std::string delimiter = ":";
     size_t curr_index;
     int time_arr[6];
@@ -745,18 +744,46 @@ size_t TailCommand::checkSyntaxTail(const char *line, char **args, bool *valid) 
 }
 
 size_t TailCommand::count_lines(char *buf) {
-    std::ifstream tail_file(buf, std::ifstream::in);
-    if (!tail_file.is_open()) {
-        perror("smash error: something failed"); //? what to write here??
+    int fd = -1;
+    if((fd = open(buf, O_RDONLY)) < 0){
+        perror("smash error: open failed");
         throw std::exception();
     }
     string line;
     size_t counter = 0;
-    while (getline(tail_file, line)) {
+
+    while (readLine(fd, line)) {
+        line.clear();
         counter++;
     }
-    tail_file.close();
+
+    if(close(fd) < 0){
+        perror("smash error: close failed");
+        throw std::exception();
+    }
     return counter;
+}
+
+bool TailCommand::readLine(int fd, std::string& line){
+    int read_rt;
+    char curr_ch[1];
+
+    while(true) {
+        //assuming file is open
+        read_rt = read(fd, curr_ch, 1);
+
+        if (read_rt == 0) {
+            // finished reading
+            return false;
+
+        } else if (curr_ch[0] == '\n') {
+            return true;
+
+        } else {
+            line.append(curr_ch);
+            continue;
+        }
+    }
 }
 
 TouchCommand::TouchCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {

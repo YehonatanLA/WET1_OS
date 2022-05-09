@@ -243,7 +243,9 @@ public:
 
     void execute() override;
 
-    static size_t count_lines(char buf[4096]);
+    size_t count_lines(char buf[4096]);
+
+    bool readLine(int fd, std::string& basicString);
 };
 
 class TouchCommand : public BuiltInCommand {
