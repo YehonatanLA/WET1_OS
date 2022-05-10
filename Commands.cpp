@@ -89,7 +89,7 @@ SmallShell::~SmallShell() {
 // TODO: add your implementation
 }
 
-int findSign(const char *cmd_line, string sign) {
+int findSign(const char *cmd_line, string &sign) {
     char *args[COMMAND_MAX_ARGS];
     int size = _parseCommandLine(cmd_line, args);
 
@@ -421,7 +421,7 @@ void SmallShell::saveChangePrompt(const char *cmd) {
 }
 
 bool SmallShell::isNumber(char *string) {
-    if(string[0] != '-' && !isdigit(string[0])){
+    if((string[0] != '-' && !isdigit(string[0])) || (string[0] == '-' && strlen(string) == 1)){
         return false;
     }
     size_t len = strlen(string);
@@ -789,7 +789,7 @@ size_t TailCommand::count_lines(char *buf) {
         throw std::exception();
     }
     string line;
-    size_t counter = 0;
+    size_t counter = 1;
 
     while (readLine(fd, line)) {
         line.clear();
